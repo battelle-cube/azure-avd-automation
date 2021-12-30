@@ -1,5 +1,11 @@
 targetScope = 'subscription'
 
+@description('Enable accelerated networking if the selected VM SKU supports it.')
+param AcceleratedNetworking bool = false
+
+@description('The Object ID for the Windows Virtual Desktop Enterprise Application in Azure AD.  The Object ID can found by selecting Microsoft Applications using the Application type filter in the Enterprise Applications blade of Azure AD.')
+param AvdObjectId string = 'cdcfb416-e2fe-41e2-be12-33813c1cd427'
+
 @description('Input RDP properties to add or remove RDP functionality on the AVD host pool. Settings reference: https://docs.microsoft.com/en-us/windows-server/remote/remote-desktop-services/clients/rdp-files?context=/azure/virtual-desktop/context/context')
 param CustomRdpProperty string = 'audiocapturemode:i:1;camerastoredirect:s:*;use multimon:i:0;drivestoredirect:s:;'
 
@@ -39,8 +45,16 @@ param DrainMode bool = false
 @description('Choose whether the session host uses an ephemeral disk for the operating system.  Be sure to select a VM SKU that offers a temporary disk that meets your image requirements. Reference: https://docs.microsoft.com/en-us/azure/virtual-machines/ephemeral-os-disks')
 param EphemeralOsDisk bool = false
 
-@description('Enable FSLogix to manage user profiles for the AVD session hosts.')
-param FSLogix bool = true
+@allowed([
+  'AzureNetAppFiles Premium'
+  'AzureNetAppFiles Standard'
+  'AzureNetAppFiles Ultra'
+  'AzureStorageAccount Premium'
+  'AzureStorageAccount Standard'
+  'None'
+])
+@description('Enable an FSLogix storage option to manage user profiles for the AVD session hosts. The selected service & SKU should provide sufficient IOPS for all of your users. https://docs.microsoft.com/en-us/azure/architecture/example-scenario/wvd/windows-virtual-desktop-fslogix#performance-requirements')
+param FSLogixStorage string = 'AzureStorageAccount Standard'
 
 @allowed([
   'Pooled DepthFirst'
@@ -67,7 +81,7 @@ param ImageVersion string = 'latest'
   'AES256'
   'RC4'
 ])
-@description('The Active Directory computer object Kerberos encryption type for the Azure Storage Account.')
+@description('The Active Directory computer object Kerberos encryption type for the Azure Storage Account or Azure NetApp Files Account.')
 param KerberosEncryption string = 'RC4'
 
 @maxValue(730)
@@ -119,16 +133,16 @@ param ScalingMinimumNumberOfRdsh string = '0'
 param ScalingSessionThresholdPerCPU string = '1'
 
 @description('Time zone off set for host pool location; Format 24 hours e.g. -4:00 for Eastern Daylight Time')
-param ScalingTimeDifference string = '-4:00'
+param ScalingTimeDifference string = '-5:00'
 
 @description('Determines whether the Screen Capture Protection feature is enabled.  As of 9/17/21 this is only supported in Azure Cloud. https://docs.microsoft.com/en-us/azure/virtual-desktop/screen-capture-protection')
 param ScreenCaptureProtection bool = false
 
 @description('The Object ID for the Security Principal to assign to the AVD Application Group.  This Security Principal will be assigned the Desktop Virtualization User role on the Application Group.')
-param SecurityPrincipalId string = '5c55bf93-86ee-4e1d-a81a-3a78402e6077'
+param SecurityPrincipalId string = 'f05646a6-dc96-4b13-99e9-678f10d30c10'
 
 @description('The name for the Security Principal to assign NTFS permissions on the Azure File Share to support FSLogix.  Any value can be input in this field if performing a deployment update or choosing a personal host pool.')
-param SecurityPrincipalName string = 'avd_users'
+param SecurityPrincipalName string = 'AVD'
 
 @description('The number of session hosts to deploy in the host pool')
 param SessionHostCount int = 1
@@ -138,13 +152,6 @@ param SessionHostIndex int = 0
 
 @description('Determines whether the Start VM On Connect feature is enabled. https://docs.microsoft.com/en-us/azure/virtual-desktop/start-virtual-machine-connect')
 param StartVmOnConnect bool = true
-
-@allowed([
-  'Standard_LRS'
-  'Premium_LRS'
-])
-@description('The SKU for the Azure storage account containing the AVD user profile data.  The selected SKU should provide sufficient IOPS for all of your users. https://docs.microsoft.com/en-us/azure/architecture/example-scenario/wvd/windows-virtual-desktop-fslogix#performance-requirements')
-param StorageAccountSku string = 'Standard_LRS'
 
 @description('The subnet for the AVD session hosts.')
 param Subnet string = 'Clients'
@@ -162,10 +169,10 @@ param TimeStamp string = utcNow('yyyyMMddhhmmss')
 param ValidationEnvironment bool = false
 
 @description('Virtual network for the AVD sessions hosts')
-param VirtualNetwork string = 'vnet-shd-net-d-eu-000'
+param VirtualNetwork string = 'vnet-shd-net-d-eu'
 
 @description('Virtual network resource group for the AVD sessions hosts')
-param VirtualNetworkResourceGroup string = 'rg-shd-net-d-eu-000'
+param VirtualNetworkResourceGroup string = 'rg-shd-net-d-eu'
 
 @secure()
 @description('Local administrator password for the AVD session hosts')
@@ -177,26 +184,87 @@ param VmSize string = 'Standard_B2s'
 @description('The Local Administrator Username for the Session Hosts')
 param VmUsername string
 
-@description('The Object ID for the Windows Virtual Desktop Enterprise Application in Azure AD.  The Object ID can found by selecting Microsoft Applications using the Application type filter in the Enterprise Applications blade of Azure AD.')
-param AvdObjectId string = 'cdcfb416-e2fe-41e2-be12-33813c1cd427'
 
 var AppGroupName = 'dag-${ResourceNameSuffix}'
 var AutomationAccountName = 'aa-${ResourceNameSuffix}'
+var FSLogix = FSLogixStorage == 'None' ? false : true
 var HostPoolName = 'hp-${ResourceNameSuffix}'
 var KeyVaultName = 'kv-${ResourceNameSuffix}'
 var Location = deployment().location
+var LocationShort = {
+  australiacentral: 'ac'
+  australiacentral2: 'ac2'
+  australiaeast: 'ae'
+  australiasoutheast: 'as'
+  brazilsouth: 'bs2'
+  brazilsoutheast: 'bs'
+  canadacentral: 'cc'
+  canadaeast: 'ce'
+  centralindia: 'ci'
+  centralus: 'cu'
+  eastasia: 'ea'
+  eastus: 'eu'
+  eastus2: 'eu2'
+  francecentral: 'fc'
+  francesouth: 'fs'
+  germanynorth: 'gn'
+  germanywestcentral: 'gwc'
+  japaneast: 'je'
+  japanwest: 'jw'
+  jioindiacentral: 'jic'
+  jioindiawest: 'jiw'
+  koreacentral: 'kc'
+  koreasouth: 'ks'
+  northcentralus: 'ncu'
+  northeurope: 'ne'
+  norwayeast: 'ne2'
+  norwaywest: 'nw'
+  southafricanorth: 'san'
+  southafricawest: 'saw'
+  southcentralus: 'scu'
+  southeastasia: 'sa'
+  southindia: 'si'
+  swedencentral: 'sc'
+  switzerlandnorth: 'sn'
+  switzerlandwest: 'sw'
+  uaecentral: 'uc'
+  uaenorth: 'un'
+  uksouth: 'us'
+  ukwest: 'uw'
+  usdodcentral: 'uc'
+  usdodeast: 'ue'
+  usgovarizona: 'ua'
+  usgoviowa: 'ui'
+  usgovtexas: 'ut'
+  usgovvirginia: 'uv'
+  westcentralus: 'wcu'
+  westeurope: 'we'
+  westindia: 'wi'
+  westus: 'wu'
+  westus2: 'wu2'
+  westus3: 'wu3'
+}
 var LogAnalyticsWorkspaceName = 'law-${ResourceNameSuffix}'
 var LogicAppName = 'la-${ResourceNameSuffix}'
+var ManagedIdentityName = 'uami-${ResourceNameSuffix}'
+var NetAppAccountName = 'naa-${ResourceNameSuffix}'
+var NetAppCapacityPoolName = 'nacp-${ResourceNameSuffix}'
 var Netbios = split(DomainName, '.')[0]
+var NetworkContributorId = '4d97b98b-1d4f-4787-a291-c67834d212e7'
 var NetworkSecurityGroupName = 'nsg-${ResourceNameSuffix}'
+var PooledHostPool = split(HostPoolType, ' ')[0] == 'Pooled' ? true : false
+var ReaderId = 'acdd72a7-3385-48ef-bd42-f606fba81ae7'
 var RecoveryServicesVaultName = 'rsv-${ResourceNameSuffix}'
 var ResourceGroups = [
     'rg-${ResourceNameSuffix}-infra'
     'rg-${ResourceNameSuffix}-hosts'
 ]
-var RoleAssignmentName = guid(subscription().id, 'WindowsVirtualDesktop')
-var RoleDefinitionName = guid(subscription().id, 'StartVmOnConnect')
+var RoleAssignmentName_StartVmOnConnect = guid(subscription().id, 'StartVmOnConnect')
+var RoleAssignmentName_AzureNetAppFiles = guid(subscription().id, 'AzureNetAppFiles', ResourceNameSuffix)
+var RoleDefinitionName = 'StartVmOnConnect_${guid(subscription().id, 'StartVmOnConnect')}'
 var StorageAccountName = 'stor${toLower(substring(uniqueString(subscription().id, ResourceGroups[0]), 0, 11))}'
+var StorageSolution = split(FSLogixStorage, ' ')[0]
+var StorageSku = FSLogixStorage == 'None' ? 'None' : split(FSLogixStorage, ' ')[1]
 var TimeZones = {
     australiacentral: 'Australian Eastern Standard Time'
     australiacentral2: 'Australian Eastern Standard Time'
@@ -277,7 +345,7 @@ resource customRole 'Microsoft.Authorization/roleDefinitions@2018-01-01-preview'
       subscription().id
     ]
     roleName: RoleDefinitionName
-    description: 'StartVmOnConnect role allow AVD session hosts to be started when needed.'
+    description: 'Allow AVD session hosts to be started when needed.'
     type: 'customRole'
     permissions: [
       {
@@ -292,8 +360,8 @@ resource customRole 'Microsoft.Authorization/roleDefinitions@2018-01-01-preview'
   }
 }
 
-resource roleAssignment 'Microsoft.Authorization/roleAssignments@2018-01-01-preview' = if(StartVmOnConnect) {
-  name: RoleAssignmentName
+resource roleAssignment_svoc 'Microsoft.Authorization/roleAssignments@2018-01-01-preview' = if(StartVmOnConnect) {
+  name: RoleAssignmentName_StartVmOnConnect
   properties: {
     roleDefinitionId: customRole.id
     principalId: AvdObjectId
@@ -312,6 +380,7 @@ module hostPool 'modules/hostPool.bicep' = {
     LogAnalyticsWorkspaceRetention: LogAnalyticsWorkspaceRetention
     LogAnalyticsWorkspaceSku: LogAnalyticsWorkspaceSku
     Location: Location
+    ManagedIdentityName: ManagedIdentityName
     MaxSessionLimit: MaxSessionLimit
     SecurityPrincipalId: SecurityPrincipalId
     StartVmOnConnect: StartVmOnConnect
@@ -322,10 +391,113 @@ module hostPool 'modules/hostPool.bicep' = {
   } 
 }
 
+module managedIdentity './modules/managedIdentity.bicep' = if(StorageSolution == 'AzureNetAppFiles') {
+  name: 'ManagedIdentityTemplate'
+  scope: resourceGroup(VirtualNetworkResourceGroup)
+  params: {
+    ManagedIdentityId: hostPool.outputs.managedIdentityId
+    NetworkContributorId: NetworkContributorId
+  }
+}
+
+resource roleAssignment_anf 'Microsoft.Authorization/roleAssignments@2020-04-01-preview' = if(StorageSolution == 'AzureNetAppFiles') {
+  name: RoleAssignmentName_AzureNetAppFiles
+  properties: {
+    roleDefinitionId: resourceId('Microsoft.Authorization/roleDefinitions', ReaderId)
+    principalId: hostPool.outputs.managedIdentityId
+    principalType: 'ServicePrincipal'
+  }
+}
+
+
+module fslogixMgmtVm 'modules/fslogixMgmtVm.bicep' = if(FSLogix) {
+  name: 'fslogixMgmtVm_${TimeStamp}'
+  scope: resourceGroup(rgInfra.name)
+  params: {
+    DomainJoinPassword: DomainJoinPassword
+    DomainJoinUserPrincipalName: DomainJoinUserPrincipalName
+    DomainName: DomainName
+    Location: Location
+    ResourceNameSuffix: ResourceNameSuffix
+    Subnet: Subnet
+    Tags: Tags
+    Timestamp: TimeStamp
+    VirtualNetwork: VirtualNetwork
+    VirtualNetworkResourceGroup: VirtualNetworkResourceGroup
+    VmName: VmName
+    VmPassword: VmPassword
+    VmUsername: VmUsername
+  }
+  dependsOn: [
+    hostPool
+    managedIdentity
+    roleAssignment_anf
+  ]
+}
+
+
+module fslogixNetApp 'modules/fslogixNetApp.bicep' = if(FSLogix && StorageSolution == 'AzureNetAppFiles') {
+  name: 'fslogixNetApp_${TimeStamp}'
+  scope: resourceGroup(rgInfra.name)
+  params: {
+    DomainJoinPassword: DomainJoinPassword
+    DomainJoinUserPrincipalName: DomainJoinUserPrincipalName
+    DomainName: DomainName
+    HostPoolName: HostPoolName
+    Location: Location
+    ManagedIdentityName: ManagedIdentityName
+    NetAppAccountName: NetAppAccountName
+    NetAppCapacityPoolName: NetAppCapacityPoolName
+    OuPath: OuPath
+    ResourceNameSuffix: ResourceNameSuffix
+    SecurityPrincipalName: SecurityPrincipalName
+    SmbServerLocation: LocationShort[Location]
+    StorageSku: StorageSku
+    Tags: Tags
+    Timestamp: TimeStamp
+    VirtualNetwork: VirtualNetwork
+    VirtualNetworkResourceGroup: VirtualNetworkResourceGroup
+    VmName: VmName
+  }
+  dependsOn: [
+    hostPool
+    managedIdentity
+    fslogixMgmtVm
+  ]
+}
+
+module fslogixStorageAccount 'modules/fslogixStorageAccount.bicep' = if(FSLogix && StorageSolution == 'AzureStorageAccount') {
+  name: 'fslogixStorageAccount_${TimeStamp}'
+  scope: resourceGroup(rgInfra.name)
+  params: {
+    DomainJoinPassword: DomainJoinPassword
+    DomainJoinUserPrincipalName: DomainJoinUserPrincipalName
+    DomainServices: DomainServices
+    HostPoolName: HostPoolName
+    KerberosEncryptionType: KerberosEncryption
+    Location: Location
+    Netbios: Netbios
+    OuPath: OuPath
+    SecurityPrincipalId: SecurityPrincipalId
+    SecurityPrincipalName: SecurityPrincipalName
+    StorageAccountName: StorageAccountName
+    StorageSku: StorageSku
+    Tags: Tags
+    Timestamp: TimeStamp
+    VmName: VmName
+  }
+  dependsOn: [
+    hostPool
+    managedIdentity
+    fslogixMgmtVm
+  ]
+}
+
 module sessionHosts 'modules/sessionHosts.bicep' = {
   name: 'sessionHosts_${TimeStamp}'
   scope: resourceGroup(ResourceGroups[1])
   params: {
+    AcceleratedNetworking: AcceleratedNetworking
     DiskSku: DiskSku
     DodStigCompliance: DodStigCompliance
     DomainJoinPassword: DomainJoinPassword
@@ -343,6 +515,7 @@ module sessionHosts 'modules/sessionHosts.bicep' = {
     Location: Location
     LogAnalyticsWorkspaceName: LogAnalyticsWorkspaceName
     NetworkSecurityGroupName: NetworkSecurityGroupName
+    NetAppFileShare: StorageSolution == 'AzureNetAppFiles' ? fslogixNetApp.outputs.fileshare : 'None'
     OuPath: OuPath
     RdpShortPath: RdpShortPath
     ResourceNameSuffix: ResourceNameSuffix
@@ -350,6 +523,7 @@ module sessionHosts 'modules/sessionHosts.bicep' = {
     SessionHostCount: SessionHostCount
     SessionHostIndex: SessionHostIndex
     StorageAccountName: StorageAccountName
+    StorageSolution: StorageSolution
     Subnet: Subnet
     Tags: Tags
     Timestamp: TimeStamp
@@ -358,38 +532,6 @@ module sessionHosts 'modules/sessionHosts.bicep' = {
     VmName: VmName
     VmPassword: VmPassword
     VmSize: VmSize
-    VmUsername: VmUsername
-  }
-  dependsOn: [
-    hostPool
-  ]
-}
-
-module fslogix 'modules/fslogix.bicep' = if(split(HostPoolType, ' ')[0] == 'Pooled' && FSLogix) {
-  name: 'fslogix_${TimeStamp}'
-  scope: resourceGroup(rgInfra.name)
-  params: {
-    DomainJoinPassword: DomainJoinPassword
-    DomainJoinUserPrincipalName: DomainJoinUserPrincipalName
-    DomainName: DomainName
-    DomainServices: DomainServices
-    HostPoolName: HostPoolName
-    KerberosEncryptionType: KerberosEncryption
-    Location: Location
-    Netbios: Netbios
-    OuPath: OuPath
-    ResourceNameSuffix: ResourceNameSuffix
-    SecurityPrincipalId: SecurityPrincipalId
-    SecurityPrincipalName: SecurityPrincipalName
-    StorageAccountName: StorageAccountName
-    StorageAccountSku: StorageAccountSku
-    Subnet: Subnet
-    Tags: Tags
-    Timestamp: TimeStamp
-    VirtualNetwork: VirtualNetwork
-    VirtualNetworkResourceGroup: VirtualNetworkResourceGroup
-    VmName: VmName
-    VmPassword: VmPassword
     VmUsername: VmUsername
   }
   dependsOn: [
@@ -414,7 +556,8 @@ module backup 'modules/backup.bicep' = if(RecoveryServices) {
     VmResourceGroupName: ResourceGroups[1]
   }
   dependsOn: [
-    fslogix
+    fslogixNetApp
+    fslogixStorageAccount
     hostPool
     sessionHosts
   ]
@@ -456,7 +599,7 @@ module stig 'modules/stig.bicep' = if(DodStigCompliance) {
   ]
 }
 
-module scale 'modules/scale.bicep' = if(split(HostPoolType, ' ')[0] == 'Pooled') {
+module scale 'modules/scale.bicep' = if(PooledHostPool) {
   name: 'scale_${TimeStamp}'
   scope: resourceGroup(rgInfra.name)
   params: {
@@ -477,14 +620,15 @@ module scale 'modules/scale.bicep' = if(split(HostPoolType, ' ')[0] == 'Pooled')
   dependsOn: [
     backup
     bitLocker
-    fslogix
+    fslogixNetApp
+    fslogixStorageAccount
     hostPool
     sessionHosts
     stig
   ]
 }
 
-module drainMode 'modules/drainMode.bicep' = if(split(HostPoolType, ' ')[0] == 'Pooled' && DrainMode) {
+module drainMode 'modules/drainMode.bicep' = if(PooledHostPool && DrainMode) {
   name: 'drainMode_${TimeStamp}'
   scope: resourceGroup(rgInfra.name)
   params: {
@@ -494,7 +638,8 @@ module drainMode 'modules/drainMode.bicep' = if(split(HostPoolType, ' ')[0] == '
     Timestamp: TimeStamp
   }
   dependsOn: [
-    fslogix
+    fslogixNetApp
+    fslogixStorageAccount
     hostPool
     sessionHosts
   ]

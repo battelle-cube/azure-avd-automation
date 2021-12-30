@@ -1,3 +1,4 @@
+param AcceleratedNetworking bool
 param DiskSku string
 param DodStigCompliance bool
 param DomainName string
@@ -17,6 +18,7 @@ param ImageVersion string
 param Location string
 param LogAnalyticsWorkspaceName string
 param NetworkSecurityGroupName string
+param NetAppFileShare string
 param OuPath string
 param RdpShortPath bool
 param ResourceNameSuffix string
@@ -24,6 +26,7 @@ param SessionHostCount int
 param SessionHostIndex int
 param ScreenCaptureProtection bool
 param StorageAccountName string
+param StorageSolution string
 param Subnet string
 param Tags object
 param Timestamp string
@@ -55,6 +58,10 @@ var NvidiaVmSizes = [
   'Standard_NV12s_v3'
   'Standard_NV24s_v3'
   'Standard_NV48s_v3'
+  'Standard_NC4as_T4_v3'
+  'Standard_NC8as_T4_v3'
+  'Standard_NC16as_T4_v3'
+  'Standard_NC64as_T4_v3'
 ]
 var NvidiaVmSize = contains(NvidiaVmSizes, VmSize)
 var PooledHostPool = (split(HostPoolType, ' ')[0] == 'Pooled')
@@ -128,7 +135,7 @@ resource nic 'Microsoft.Network/networkInterfaces@2020-05-01' = [for i in range(
         }
       }
     ]
-    enableAcceleratedNetworking: false
+    enableAcceleratedNetworking: AcceleratedNetworking
     enableIPForwarding: false
     networkSecurityGroup: RdpShortPath ? json(concat('{"id": "', nsg.id, '"}')) : null 
   }
@@ -247,7 +254,7 @@ resource customScriptExtension 'Microsoft.Compute/virtualMachines/extensions@202
       timestamp: Timestamp
     }
     protectedSettings: {
-      commandToExecute: 'powershell -ExecutionPolicy Unrestricted -File Set-SessionHostConfiguration.ps1 -AmdVmSize ${AmdVmSize} -DodStigCompliance ${DodStigCompliance} -Environment ${environment().name} -FSLogix ${FSLogix} -HostPoolName ${HostPoolName} -HostPoolRegistrationToken ${reference(resourceId(HostPoolResourceGroupName, 'Microsoft.DesktopVirtualization/hostpools', HostPoolName), '2019-12-10-preview').registrationInfo.token} -ImageOffer ${ImageOffer} -ImagePublisher ${ImagePublisher} -NvidiaVmSize ${NvidiaVmSize} -PooledHostPool ${PooledHostPool} -RdpShortPath ${RdpShortPath} -ScreenCaptureProtection ${ScreenCaptureProtection} -StorageAccountName ${StorageAccountName}'
+      commandToExecute: 'powershell -ExecutionPolicy Unrestricted -File Set-SessionHostConfiguration.ps1 -AmdVmSize ${AmdVmSize} -DodStigCompliance ${DodStigCompliance} -DomainName ${DomainName} -Environment ${environment().name} -FSLogix ${FSLogix} -HostPoolName ${HostPoolName} -HostPoolRegistrationToken ${reference(resourceId(HostPoolResourceGroupName, 'Microsoft.DesktopVirtualization/hostpools', HostPoolName), '2019-12-10-preview').registrationInfo.token} -ImageOffer ${ImageOffer} -ImagePublisher ${ImagePublisher} -NetAppFileShare ${NetAppFileShare} -NvidiaVmSize ${NvidiaVmSize} -PooledHostPool ${PooledHostPool} -RdpShortPath ${RdpShortPath} -ScreenCaptureProtection ${ScreenCaptureProtection} -StorageAccountName ${StorageAccountName} -StorageSolution ${StorageSolution}'
     }
   }
   dependsOn: [

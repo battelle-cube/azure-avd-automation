@@ -31,11 +31,10 @@ This solution will deploy Azure Virtual Desktop in an Azure subscription.  Depen
 This solution contains many features that are usually enabled manually after deploying an AVD host pool.  Those features are:
 
 - FSLogix (Pooled host pools only): deploys the required resources to enable the feature:
-  - Azure Storage Account
-  - Azure File Share
+  - Azure Storage Account or Azure NetApp Files with a fully configured file share
   - Management Virtual Machine with Custom Script Extension to:
-    - Domain join the Storage Account
-    - Sets the Share and NTFS permissions
+    - Domain joins the Storage Account or creates the AD connection on the Azure NetApp Account
+    - Sets the required permissions for access to the file share
   - Custom Script Extension on Session Hosts to enable FSLogix using registry settings
 - Scaling Automation (Pooled host pools only): deploys the required resources to enable the feature:
   - Automation Account with a Managed Identity
@@ -53,7 +52,7 @@ This solution contains many features that are usually enabled manually after dep
   - Log Analytics Workspace with the required Windows Events and Performance Counters.
   - Microsoft Monitoring Agent on the session hosts.
   - Diagnostic settings on the AVD host pool and workspace.
-- Graphics Drivers & Settings: deploys the extension to install the graphics driver and creates the recommended registry settings when an appropriate VM size (Nv, Nvv3, & Nvv4 series) is selected.
+- Graphics Drivers & Settings: deploys the extension to install the graphics driver and creates the recommended registry settings when an appropriate VM size (Nv, Nvv3, Nvv4, or NCasT4_v3 series) is selected.
 - BitLocker Encryption: deploys the required resources & configuration to enable BitLocker encryption on the session hosts:
   - Key Vault with a Key Encryption Key
   - VM Extension to enable the feature on the virtual machines.
@@ -64,6 +63,8 @@ This solution contains many features that are usually enabled manually after dep
   - Protected Item
 - Screen Capture Protection: deploys the required registry setting on the AVD session hosts to enable the feature.
 - Drain Mode: when enabled, the sessions hosts will be deployed in drain mode to ensure end users cannot access the host pool until operations is ready to allow connections.
+- RDP ShortPath: deploys the requirements to enable RDP ShortPath for AVD.
+- SMB Multichannel: Enables multiple connections to an SMB share.  This feature is only supported with a premium Azure Storage Account.
 
 ## Assumptions
 
@@ -81,12 +82,18 @@ To successfully deploy this solution, you will need to ensure your scenario matc
 To successfully deploy this solution, you will need to first ensure the following prerequisites have been completed:
 
 - Create a Security Group in ADDS for your AVD users.  Once the object has synchronized to Azure AD, make note of the name and object ID in Azure AD.  This will be needed to deploy the solution.
+- If you plan to use Azure NetApp Files for FSLogix, complete the following:
+  - [Register the resource provider](https://docs.microsoft.com/en-us/azure/azure-netapp-files/azure-netapp-files-register)
+  - [Delegate a subnet to Azure NetApp Files](https://docs.microsoft.com/en-us/azure/azure-netapp-files/azure-netapp-files-delegate-subnet)
+  - [Enable the shared AD feature](https://docs.microsoft.com/en-us/azure/azure-netapp-files/create-active-directory-connections#shared_ad) if you plan to deploy more than one NetApp account in the same Azure subscription and region
 
 ## Considerations
 
 If you are deploying this solution to multiple subscriptions in the same tenant and want to use the Start VM On Connect feature, set the StartVmOnConnect parameter to false.  The custom role should be created at the Management Group scope.  The role assignment for the WVD service using the custom role should be set at the Management Group scope as well.  The Start VM On Connect feature would need to be manually enabled on the host pool per deployment.
 
 If you need to redeploy your solution b/c of an error or other reason, be sure the virtual machines are turned on.  If your host pool is "pooled", I would recommended disabling your logic app to ensure the scaling solution doesn't turn off any of your VM's during the deployment.  If the VM's are off, the deployment will fail since the extensions cannot be validated / updated.
+
+Azure NetApp Files can only have one Active Directory Connection per subscription per region.  Due to this design, when deploying ANF be sure to deploy the first ANF account by itself to establish the AD Connection.  Once that is established and the connection sharing feature is enabled, any number of ANF accounts may also be deployed to the same subscription and region.
 
 ## Post Deployment Requirements
 

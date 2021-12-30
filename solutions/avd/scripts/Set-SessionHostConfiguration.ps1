@@ -10,6 +10,10 @@ Param(
 
     [parameter(Mandatory)]
     [string]
+    $DomainName,    
+
+    [parameter(Mandatory)]
+    [string]
     $Environment,
 
     [parameter(Mandatory)]
@@ -34,6 +38,10 @@ Param(
 
     [parameter(Mandatory)]
     [string]
+    $NetAppFileShare,
+
+    [parameter(Mandatory)]
+    [string]
     $NvidiaVmSize,
 
     [parameter(Mandatory)]
@@ -50,7 +58,11 @@ Param(
 
     [parameter(Mandatory)]
     [string]
-    $StorageAccountName
+    $StorageAccountName,
+
+    [parameter(Mandatory)]
+    [string]
+    $StorageSolution    
 )
 
 
@@ -109,11 +121,13 @@ Write-Log -Message "FSLogix: $FSLogix" -Type 'INFO'
 Write-Log -Message "HostPoolName: $HostPoolName" -Type 'INFO'
 Write-Log -Message "ImageOffer: $ImageOffer" -Type 'INFO'
 Write-Log -Message "ImagePublisher: $ImagePublisher" -Type 'INFO'
+Write-Log -Message "NetAppFileShare: $NetAppFileShare" -Type 'INFO'
 Write-Log -Message "NvidiaVmSize: $NvidiaVmSize" -Type 'INFO'
 Write-Log -Message "PooledHostPool: $PooledHostPool" -Type 'INFO'
 Write-Log -Message "RdpShortPath: $RdpShortPath" -Type 'INFO'
 Write-Log -Message "ScreenCaptureProtection: $ScreenCaptureProtection" -Type 'INFO'
 Write-Log -Message "StorageAccountName: $StorageAccountName" -Type 'INFO'
+Write-Log -Message "StorageSolution: $StorageSolution" -Type 'INFO'
 
 
 ##############################################################
@@ -212,14 +226,19 @@ if($ScreenCaptureProtection -eq 'true')
 ##############################################################
 #  Add FSLogix Configurations
 ##############################################################
-if($PooledHostPool -eq 'true' -and $FSLogix -eq 'true')
+if($PooledHostPool -eq 'true' -and $StorageSolution -ne 'None')
 {
     $Suffix = switch($Environment)
     {
         AzureCloud {'.file.core.windows.net'}
         AzureUSGovernment {'.file.core.usgovcloudapi.net'}
     }
-    $FileShare = '\\' + $StorageAccountName + $Suffix + '\' + $HostPoolName
+
+    switch($StorageSolution)
+    {
+        'AzureStorageAccount' {$FileShare = '\\' + $StorageAccountName + $Suffix + '\' + $HostPoolName}
+        'AzureNetAppFiles' {$FileShare = '\\' + $NetAppFileShare + '\' + $HostPoolName}
+    }
     Write-Log -Message "File Share: $FileShare" -Type 'INFO'
 
     $Settings += @(

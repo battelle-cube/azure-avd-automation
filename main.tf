@@ -213,7 +213,6 @@ variable "vm_size" {
 }
 variable "vm_username" {
   type = string
-  default = "azadmin"
   description = "The Local Administrator Username for the Session Hosts"
 }
 variable "wvd_object_id" {

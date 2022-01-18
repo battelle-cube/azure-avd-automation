@@ -204,7 +204,6 @@ variable "virtual_network_resource_group" {
 }
 variable "vm_password" {
   type = string
-  default = "aaAA11223344"
   description = "Local administrator password for the AVD session hosts"
 }
 variable "vm_size" {

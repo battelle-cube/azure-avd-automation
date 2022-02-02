@@ -32,7 +32,7 @@ variable "disk_encryption" {
 variable "disk_sku" {
   type = string
   default = "Standard_LRS"
-  description = "The storage SKU for the AVD session host disks.  Production deployments should use 'Premium_LRS'."
+  description = "The storage SKU for the AVD session host disks.  Production deployments should use 'Premium_LRS'. Allowed values are 'Standard_LRS', StandardSSD_LRS', and 'Premium_LRS'"
 }
 variable "dod_stig_compliance" {
   type = bool
@@ -46,7 +46,7 @@ variable "domain_name" {
 variable "domain_services" {
   type = string
   default = "AzureActiveDirectory"
-  description = "The service providing domain services for Azure Virtual Desktop.  This is needed to determine the proper solution to domain join the Azure Storage Account."
+  description = "The service providing domain services for Azure Virtual Desktop.  This is needed to determine the proper solution to domain join the Azure Storage Account. Allowed values are 'ActiveDirectory', and 'AzureActiveDirectory'"
 }
 variable "drain_mode" {
   type = bool
@@ -66,7 +66,7 @@ variable "fs_logix" {
 variable "host_pool_type" {
   type = string
   default = "Pooled DepthFirst"
-  description = "These options specify the host pool type and depending on the type, provides the load balancing options and assignment types."
+  description = "These options specify the host pool type and depending on the type, provides the load balancing options and assignment types. Allowed values are 'Pooled DepthFirst', 'Pooled BreadthFirst', 'Personal Automatic', and 'Personal Direct'"
 }
 variable "image_offer" {
   type = string
@@ -91,7 +91,7 @@ variable "image_version" {
 variable "kerberos_excryption_type" {
   type = string
   default = "RC4"
-  description = "The Active Directory computer object Kerberos encryption type for the Azure Storage Account.  Allowed values are AES256 and RC4"
+  description = "The Active Directory computer object Kerberos encryption type for the Azure Storage Account.  Allowed values are 'AES256' and 'RC4'"
 }
 variable "log_analytics_workspace_retention" {
   type = number
@@ -101,7 +101,7 @@ variable "log_analytics_workspace_retention" {
 variable "log_analytics_workspace_sku" {
   type = string
   default = "PerGB2018"
-  description = "The SKU for the Log Analytics Workspace to setup the AVD Monitoring solution.  Allowed values are Free, Standard, Premium, PerNode, PerGB2018, Standalone, and CapacityReservation"
+  description = "The SKU for the Log Analytics Workspace to setup the AVD Monitoring solution.  Allowed values are 'Free', 'Standard', 'Premium', 'PerNode', 'PerGB2018', 'Standalone', and 'CapacityReservation'"
 }
 variable "max_session_limit" {
   type = number
@@ -124,7 +124,7 @@ variable "recovery_services" {
 }
 variable "resource_name_suffix" {
   type = string
-  description = "Use letters and numbers only.  This suffix is used in conjunction with the resource type prefixes to name most of the Azure resources in this solution.  The only exception is the Storage Account since the value must globally unique and has stricter character requirements."
+  description = "Use letters and numbers only.  This suffix is used in conjunction with the resource type prefixes to name most of the Azure resources in this solution.  The only exception is the Storage Account since the value must globally unique and has stricter character requirements. Value must be no more than 10 characters long."
   validation {
     condition     = length(var.resource_name_suffix) < 11
     error_message = "The resource_name_suffix value must be no more than 10 characters long."
@@ -183,7 +183,7 @@ variable "start_vm_on_connect" {
 variable "storage_account_sku" {
   type = string
   default = "Standard_LRS"
-  description = "The SKU for the Azure storage account containing the AVD user profile data.  The selected SKU should provide sufficient IOPS for all of your users. https://docs.microsoft.com/en-us/azure/architecture/example-scenario/wvd/windows-virtual-desktop-fslogix#performance-requirements.  Allowed values are Standard_LRS and Premium_LRS"
+  description = "The SKU for the Azure storage account containing the AVD user profile data.  The selected SKU should provide sufficient IOPS for all of your users. https://docs.microsoft.com/en-us/azure/architecture/example-scenario/wvd/windows-virtual-desktop-fslogix#performance-requirements.  Allowed values are 'Standard_LRS' and 'Premium_LRS'"
 }
 variable "subnet" {
   type = string
